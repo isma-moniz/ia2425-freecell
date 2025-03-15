@@ -40,17 +40,23 @@ class FreeCell:
                     self.tableau[i+4].append(self.deck.pop())
 
     def display(self):
-        print("\nTableau:")
+        print("\n=== FreeCell Game State ===\n")
+
+        print("Tableau:")
         for i, pile in enumerate(self.tableau):
-            print(f"{i + 1}: {pile}")
+            pile_str = ' '.join(str(card) for card in pile) if pile else "Empty"
+            print(f"  {i + 1}: {pile_str}")
 
         print("\nFree Cells:")
-        for i, cell in enumerate(self.free_cells):
-            print(f"{i + 1}: {cell if cell else 'Empty'}")
+        free_cells_str = ' | '.join(f"{i + 1}: {cell if cell else 'Empty'}" for i, cell in enumerate(self.free_cells))
+        print(f"  {free_cells_str}")
 
         print("\nFoundations:")
         for suit, foundation in self.foundations.items():
-            print(f"{suit}: {foundation}")
+            foundation_str = foundation if foundation else "Empty"
+            print(f"  {suit}: {foundation_str}")
+
+        print("\n==========================\n")
 
     def move_to_freecell(self, tableau_idx):
         if self.tableau[tableau_idx]:
@@ -143,7 +149,7 @@ class FreeCell:
         cards_to_move = self.tableau[source_tableau_idx][-no_cards:]
 
         empty_cells, empty_cascades = self.get_empty_cells_and_cascades()
-        max_moveable = (2 ** empty_cascades) * (empty_cells + 1)
+        max_moveable = (empty_cells + 1) * (2 ** empty_cascades)
 
         if len(cards_to_move) > max_moveable:
             print(f"Cannot move {len(cards_to_move)} cards. More empty cells or cascades needed.")
@@ -161,7 +167,10 @@ class FreeCell:
                 return False
 
         self.tableau[target_tableau_idx].extend(cards_to_move)
-        del self.tableau[source_tableau_idx][-no_cards:]  # Remove the moved cards from the source tableau
+
+        for _ in range(no_cards):
+            self.tableau[target_tableau_idx].append(self.tableau[source_tableau_idx].pop())
+
         print(f"Moved {len(cards_to_move)} cards from tableau {source_tableau_idx + 1} to tableau {target_tableau_idx + 1}")
 
         return True
@@ -200,11 +209,8 @@ class FreeCell:
                 self.move_to_foundation(int(parts[1]) - 1)
             elif parts[0] == "freecell-foundation" and len(parts) == 2:
                 self.move_freecell_to_foundation(int(parts[1]) - 1)
-            elif parts[0] == "supermove" and len(parts) == 3:
-                tableau_idx = int(parts[1]) - 1
-                num_cards = int(parts[2])
-                cards_to_move = self.tableau[tableau_idx][-num_cards:]
-                self.move_supermove(tableau_idx, cards_to_move)
+            elif parts[0] == "supermove" and len(parts) == 4:
+                self.move_supermove(int(parts[1]) - 1, int(parts[2]) - 1, int(parts[3]))
             elif parts[0] == 'undo':
                 self.undo()
             elif parts[0] == "quit":
