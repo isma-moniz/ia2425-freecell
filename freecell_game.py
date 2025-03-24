@@ -103,7 +103,14 @@ class FreeCell:
             return None
 
     def clone_boardState(self):
-        return BoardState(self.tableau, self.free_cells, self.foundations)
+        return self.board_state.clone()
+
+    def play_bot(self):
+
+        bot = FreecellBot()
+
+        bot.get_plays(self)
+        bot.play()
 
     def play_human(self):
         while not self.is_winner():
@@ -158,7 +165,6 @@ class FreeCell:
                 print("Invalid command!")
 
             if temp is not None:
-                temp.set_move_count(self.board_state.move_count + 1)
                 self.board_state = temp
 
         print("Game Over!")
