@@ -1,6 +1,8 @@
 import heapq
 import copy
 import random
+from copy import deepcopy
+
 from colorama import Fore, Style
 import heapq
 from constants import *
@@ -16,6 +18,14 @@ class Card:
     def __repr__(self):
         return f'{self.color}{self.rank} of {self.suit}{Style.RESET_ALL}'
 
+    def __eq__(self, other):
+        if isinstance(other, Card):
+            return self.rank == other.rank and self.suit == other.suit
+        return False
+
+    def __hash__(self):
+        return hash((self.rank, self.suit))
+
 class BoardState:
     def __init__(self, tableau, free_cells, foundations):
 
@@ -29,7 +39,55 @@ class BoardState:
 
         self.starting_point = False
 
+
         self.history = []
+
+    def __eq__(self, other):
+
+        #print("EQ STARTED")
+
+        if not isinstance(other, BoardState):
+            return False
+
+        # Check tableau equality
+        for i in range(TABLEAU_COUNT):
+            size1 = len(self.tableau[i])
+            size2 = len(other.tableau[i])
+
+            if size1 != size2: return False
+
+            # Compare corresponding cards in tableau
+            for first, second in zip(self.tableau[i], other.tableau[i]):
+                #print("tableau:", first, second)
+                if first != second: return False
+
+        # Check free cells equality
+        for i, o in zip(self.free_cells, other.free_cells):
+
+            #print("freecell", i, o)
+            if i != o: return False
+
+        # Check foundations equality: Compare both length and the actual cards in the foundation
+        for suit in TYPES:
+
+            #print("foundations", self.foundations[suit], other.foundations[suit])
+
+            if len(self.foundations[suit]) != len(other.foundations[suit]):
+                return False
+
+            if self.foundations[suit] != other.foundations[suit]:  # Compare the actual cards in the foundation piles
+                return False
+
+
+        #print("returning true")
+        return True
+
+    def __hash__(self):
+        tableau_hash = hash(tuple(tuple(pile) for pile in self.tableau))
+        free_cells_hash = hash(tuple(self.free_cells))
+        foundations_hash = hash(tuple((k, tuple(v)) for k, v in self.foundations.items()))
+
+        return hash((tableau_hash, free_cells_hash, foundations_hash))
 
     def set_starting_point(self):
         self.starting_point = True
@@ -113,12 +171,89 @@ class BoardState:
 
         return text + "|" if not last else text
 
+    def card_excavation_score(self):
+
+        score = 0
+
+        for extra,suit in enumerate(TYPES):
+
+            if not self.foundations[suit]:
+                next_card_val = 1
+            else:
+                card = self.foundations[suit][-1]
+
+                if card.value >= 13: continue;
+                next_card_val = card.value + 1
+
+
+            check = False
+            for i in range(TABLEAU_COUNT):
+                for index,card in enumerate(self.tableau[i]):
+
+                    if card.value != next_card_val: continue
+                    if card.suit != suit: continue
+                    check = True
+
+                    pos = (len(self.tableau[i]) - index)
+
+                    score += extra * 2 #The algorithm favours some suits over anothers
+                    #This is meant to break stalemates so if there are 2 different cards on the same depth, one will be prefered by the algorithm over another
+
+                    if pos == 0:
+                        score += CARD_EXCAVATION_MULTIPLIER * 2
+                    else:
+                        score += CARD_EXCAVATION_MULTIPLIER/pos
+                    break
+
+                if check: break
+
+
+        return score
+
+
+    def closest_card_score(self):
+
+
+        dist = 100000
+
+        for suit in TYPES:
+
+            if not self.foundations[suit]:
+                next_card_val = 1
+            else:
+                card = self.foundations[suit][-1]
+
+                if card.value >= 13: continue;
+                next_card_val = card.value + 1
+
+            check = False
+            for i in range(TABLEAU_COUNT):
+                for index, card in enumerate(self.tableau[i]):
+
+                    if card.value != next_card_val: continue
+                    if card.suit != suit: continue
+
+                    from_top = len(self.tableau[i]) - index
+
+                    if dist > from_top:
+                        dist = from_top
+                        if dist == 0 : return 100
+
+                    break
+
+                if check: break
+
+        return 80 / dist
+
     def calculate_heuristic(self):
         """Combine all the individual scores into one final heuristic score."""
+
         foundation_score = self.get_foundation_score()
         free_cell_score = self.get_free_cell_score()
         empty_tableau_score = self.get_empty_tableau_score()
         tableau_order_score = self.get_tableau_order_score()
+        card_excavation_score = self.card_excavation_score()
+
         win = self.is_winner()
 
         """
@@ -133,19 +268,19 @@ class BoardState:
 
         if win: return VICTORY_SCORE
 
-        total_score = foundation_score + free_cell_score + empty_tableau_score + tableau_order_score - self.move_count
+        total_score = foundation_score + free_cell_score + empty_tableau_score + tableau_order_score + card_excavation_score #- self.move_count
         return total_score
 
     def move_to_freecell(self, tableau_idx):
-
         if self.tableau[tableau_idx]:
-            card = self.tableau[tableau_idx].pop()
             for i in range(4):
                 if not self.free_cells[i]:
+                    card = self.tableau[tableau_idx].pop()
                     self.free_cells[i] = card
                     #print(f"Moved {card} to free cell {i + 1}")
                     self.move_count += 1
                     return True
+
         #print("Invalid move!")
         return False
 
@@ -161,11 +296,14 @@ class BoardState:
         return False
 
     def move_tableau_to_tableau(self, from_idx, to_idx):
+
         if self.tableau[from_idx]:
             card = self.tableau[from_idx][-1]
             if self.is_valid_tableau_move(to_idx, card):
+
                 self.tableau[to_idx].append(self.tableau[from_idx].pop())
-                #print(f"Moved {card} from tableau {from_idx + 1} to {to_idx + 1}")
+
+                #print(f"Moved {card} from tableau {from_idx + 1} to {to_idx + 1} ({previous_card})")
                 self.move_count += 1
                 return True
         #print("Invalid move!")
@@ -174,6 +312,7 @@ class BoardState:
     def is_valid_tableau_move(self, tableau_idx, card):
         if not self.tableau[tableau_idx]:
             return True
+
         top_card = self.tableau[tableau_idx][-1]
         return (card.value == top_card.value - 1) and (card.color != top_card.color)
 
@@ -218,18 +357,18 @@ class BoardState:
         max_moveable = (empty_cells + 1) * (2 ** empty_cascades)
 
         if len(cards_to_move) > max_moveable:
-            print(f"Cannot move {len(cards_to_move)} cards. More empty cells or cascades needed.")
+            #print(f"Cannot move {len(cards_to_move)} cards. More empty cells or cascades needed.")
             return False
 
         if not self.is_valid_sequence(cards_to_move):
-            print("The selected cards do not form a valid sequence!")
+            #print("The selected cards do not form a valid sequence!")
             return False
 
         if self.tableau[target_tableau_idx]:
             top_card = self.tableau[target_tableau_idx][-1]
             leftmost_card = cards_to_move[0]
             if not (leftmost_card.value == top_card.value - 1 and leftmost_card.color != top_card.color):
-                print(f"Invalid move: {leftmost_card} cannot be placed on {top_card}!")
+                #print(f"Invalid move: {leftmost_card} cannot be placed on {top_card}!")
                 return False
 
         self.tableau[target_tableau_idx].extend(cards_to_move)
@@ -237,7 +376,7 @@ class BoardState:
         for _ in range(no_cards):
             self.tableau[target_tableau_idx].append(self.tableau[source_tableau_idx].pop())
 
-        print(f"Moved {len(cards_to_move)} cards from tableau {source_tableau_idx + 1} to tableau {target_tableau_idx + 1}")
+        #print(f"Moved {len(cards_to_move)} cards from tableau {source_tableau_idx + 1} to tableau {target_tableau_idx + 1}")
         self.move_count += 1
 
         return True
@@ -253,7 +392,11 @@ class BoardState:
         return True
 
     def clone(self):
-        return BoardState(self.tableau, self.free_cells, self.foundations)
+
+        new_state = BoardState(deepcopy(self.tableau), deepcopy(self.free_cells), deepcopy(self.foundations))
+        new_state.move_count = self.move_count
+
+        return new_state
 
     def is_winner(self):
         """Check if the game is won (all foundations have 13 cards)."""
@@ -263,14 +406,21 @@ class BoardState:
 class MaxPriorityQueue:
     def __init__(self):
         self.heap = []
+
     def push(self, state):
-        heapq.heappush(self.heap, state)
+        heapq.heappush(self.heap, (-state.get_score(), state))
+
     def pop(self):
-        return heapq.heappop(self.heap)
+        return heapq.heappop(self.heap)[1]
+
     def peek(self):
         return self.heap[0] if self.heap else None
+
     def is_empty(self):
         return len(self.heap) == 0
+
+    def size(self):
+        return len(self.heap)
 
 
 class BotMove():
@@ -298,6 +448,9 @@ class FreecellBot():
         self.queue = MaxPriorityQueue()
         self.plays = []
 
+        self.previous = set()
+        self.start_board = None
+
     def get_possible_moves(self, state):
 
         for i in range(TABLEAU_COUNT):
@@ -315,44 +468,85 @@ class FreecellBot():
             board = state.clone()
             if board.move_to_foundation(i): self.queue_move(board, state)
 
+            #Move from one tableau to another
+            for o in range(TABLEAU_COUNT):
+                if i == o: continue
+
+                board = state.clone()
+                if board.move_tableau_to_tableau(i, o): self.queue_move(board, state)
+
+                #SuperMove
+                """
+                for cardsCount in range(len(state.tableau[i])):
+                    board = state.clone()
+                    if board.move_supermove(i, o, cardsCount): self.queue_move(board, state)
+                """
+
+        #Move from the freecell to the foundation
         for i in range(FREECELL_COUNT):
             board = state.clone()
             if board.move_freecell_to_foundation(i): self.queue_move(board, state)
 
     def queue_move(self, board, state):
+
+        for b in self.previous:
+            if b == board:
+                """
+                board.display()
+                b.display()
+                self.start_board.display()
+
+                print(len(self.previous))
+                print(board, b)
+                """
+
+                return
+
+        """
+        print("added")
+
+        board.display()
+        """
+
+        self.previous.add(board)
         self.queue.push(BotMove(board, state))
 
     def get_plays(self, freecell):
 
         self.plays.clear()
-        self.get_possible_moves(freecell.get_board())
+        self.previous.clear()
 
-        freecell.get_board().set_starting_point()
+        self.start_board = freecell.get_board()
+        self.start_board.set_starting_point()
+        self.previous.add(self.start_board)
 
-        while True:
+        self.get_possible_moves(self.start_board)
+
+        while self.queue.size() > 0:
+
 
             highest_move = self.queue.pop()
             state = highest_move.get_board()
 
-            print("Heuristic Value: ", state.calculate_heuristic())
+            # print("\n-----------------------------")
+            #print("Queue Size: ", self.queue.size())
+            #print("Heuristic Value: ", state.calculate_heuristic())
+           # print("Previous Size: ", len(self.previous))
+
 
             if state.is_winner():
                 self.plays.append(highest_move)
+                print("Winner!!!")
+                #state.display()
                 break
+
+            state.display()
 
             self.get_possible_moves(state)
 
-        #Get list of plays
-        if len(self.plays) > 0:
-            state = self.plays[len(self.plays) - 1]
-            while state.is_starting_point() is not True:
-                state = state.get_previous()
-                self.plays.append(state)
 
-            self.plays.append(state)
 
-        #Reverse it so the first entry is the start and not the end
-        self.plays.reverse()
+
 
     def play(self):
 
