@@ -1,14 +1,6 @@
-from freecell_game import FreeCell
-
+# main.py
+from freecell_gui import FreeCellGUI
 
 if __name__ == "__main__":
-    mode = input("Select mode (human/bot): ").strip().lower()
-
-    game = FreeCell()
-
-    if mode == "human":
-        game.play_human()
-    elif mode == "bot":
-        game.play_bot()
-    else:
-        print("Invalid mode selected!")
+    game_gui = FreeCellGUI()
+    game_gui.run()
