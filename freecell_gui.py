@@ -18,14 +18,15 @@ BUTTON_WIDTH = 200
 BUTTON_HEIGHT = 60
 
 # Colors
-GREEN = (0, 100, 0)
+CASINO_GREEN = (21, 109, 69)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-BLUE = (0, 0, 255)
+BORDEAUX = (109, 21, 61)
+BLUE = (25, 21, 109)
 LIGHT_BLUE = (100, 100, 255)
 GRAY = (200, 200, 200)
-DARK_GREEN = (0, 80, 0)
+DARK_GREEN = (0, 100, 0)
 
 class FreeCellGUI:
     def __init__(self):
@@ -33,9 +34,9 @@ class FreeCellGUI:
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption('FreeCell Solitaire')
         self.clock = pygame.time.Clock()
-        self.large_font = pygame.font.SysFont('Arial', 48)
-        self.medium_font = pygame.font.SysFont('Arial', 36)
-        self.small_font = pygame.font.SysFont('Arial', 24)
+        self.large_font = pygame.font.SysFont('Copperplate Gothic', 48)
+        self.medium_font = pygame.font.SysFont('Copperplate Gothic', 36)
+        self.small_font = pygame.font.SysFont('Copperplate Gothic', 24)
         
         # Game state
         self.game = None
@@ -60,10 +61,10 @@ class FreeCellGUI:
         sheet = pygame.image.load("sprites/cards.png").convert()
         cards = {}
 
-        for row, suit in enumerate(TYPES):
-            for col, rank in enumerate(RANKS):
-                x = row * (CARD_WIDTH + 4) # 4 is the offset in between cards
-                y = col * (CARD_HEIGHT + 4)
+        for row, rank in enumerate(RANKS):
+            for col, suit in enumerate(TYPES):
+                x = col * (CARD_WIDTH + 4) # 4 is the offset in between cards
+                y = row * (CARD_HEIGHT + 4)
 
                 rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
                 image = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
@@ -74,7 +75,7 @@ class FreeCellGUI:
 
     def draw_main_menu(self):
         """Draw the main menu with mode selection"""
-        self.screen.fill(DARK_GREEN)
+        self.screen.fill(CASINO_GREEN)
         
         # Title
         title = self.large_font.render("FreeCell Solitaire", True, WHITE)
@@ -85,7 +86,7 @@ class FreeCellGUI:
         human_rect = pygame.Rect(SCREEN_WIDTH//2 - BUTTON_WIDTH//2, 
                                SCREEN_HEIGHT//2 - BUTTON_HEIGHT, 
                                BUTTON_WIDTH, BUTTON_HEIGHT)
-        pygame.draw.rect(self.screen, LIGHT_BLUE, human_rect, border_radius=10)
+        pygame.draw.rect(self.screen, BORDEAUX, human_rect, border_radius=10)
         human_text = self.medium_font.render("Human", True, BLACK)
         human_text_rect = human_text.get_rect(center=human_rect.center)
         self.screen.blit(human_text, human_text_rect)
@@ -94,7 +95,7 @@ class FreeCellGUI:
         bot_rect = pygame.Rect(SCREEN_WIDTH//2 - BUTTON_WIDTH//2, 
                              SCREEN_HEIGHT//2 + BUTTON_HEIGHT, 
                              BUTTON_WIDTH, BUTTON_HEIGHT)
-        pygame.draw.rect(self.screen, LIGHT_BLUE, bot_rect, border_radius=10)
+        pygame.draw.rect(self.screen, BLUE, bot_rect, border_radius=10)
         bot_text = self.medium_font.render("Bot", True, BLACK)
         bot_text_rect = bot_text.get_rect(center=bot_rect.center)
         self.screen.blit(bot_text, bot_text_rect)
@@ -112,7 +113,7 @@ class FreeCellGUI:
 
     def draw_game(self):
         """Draw the actual game interface with cards and clear labels"""
-        self.screen.fill(GREEN)
+        self.screen.fill(CASINO_GREEN)
         
         # Draw mode indicator
         mode_text = self.small_font.render(f"Mode: {self.current_mode}", True, WHITE)
