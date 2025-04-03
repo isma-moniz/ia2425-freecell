@@ -1,14 +1,15 @@
 # gui.py
 import pygame
 import sys
+from constants import TYPES, RANKS
 from pygame.locals import *
 from freecell_game import FreeCell
 
 # Constants
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
-CARD_WIDTH = 80
-CARD_HEIGHT = 120
+CARD_WIDTH = 71
+CARD_HEIGHT = 96
 MARGIN = 20
 TABLEAU_SPACING = 110
 FREECELL_SPACING = 120
@@ -50,48 +51,26 @@ class FreeCellGUI:
         self.drag_offset_y = 0
         self.origin_pile = None
         self.origin_pile_type = None
-        
+        #TODO: why no target pile?
+
         # Load card images
-        self.card_images = self.load_card_images()
-        self.card_back = self.create_card_back()
+        self.card_images = self.load_card_spritesheet()
 
-    def load_card_images(self):
-        """Create card images with rank and suit"""
-        card_images = {}
-        for suit in ['Hearts', 'Diamonds', 'Clubs', 'Spades']:
-            for rank in ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']:
-                # Create card surface
-                card_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
-                pygame.draw.rect(card_surf, WHITE, (0, 0, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
-                pygame.draw.rect(card_surf, BLACK, (0, 0, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
-                
-                # Set text color
-                text_color = RED if suit in ['Hearts', 'Diamonds'] else BLACK
-                
-                # Render rank and suit
-                rank_text = self.small_font.render(rank, True, text_color)
-                suit_text = self.small_font.render(suit[0], True, text_color)
-                
-                # Position text
-                card_surf.blit(rank_text, (5, 5))
-                card_surf.blit(suit_text, (5, 25))
-                
-                card_images[(rank, suit)] = card_surf
-        return card_images
+    def load_card_spritesheet(self):
+        sheet = pygame.image.load("sprites/cards.png").convert()
+        cards = {}
 
-    def create_card_back(self):
-        """Create a card back image"""
-        card_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(card_surf, BLUE, (0, 0, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
-        pygame.draw.rect(card_surf, BLACK, (0, 0, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
-        
-        # Add pattern to back
-        for i in range(0, CARD_WIDTH, 10):
-            pygame.draw.line(card_surf, WHITE, (i, 0), (i, CARD_HEIGHT), 1)
-        for i in range(0, CARD_HEIGHT, 10):
-            pygame.draw.line(card_surf, WHITE, (0, i), (CARD_WIDTH, i), 1)
-            
-        return card_surf
+        for row, suit in enumerate(TYPES):
+            for col, rank in enumerate(RANKS):
+                x = row * (CARD_WIDTH + 4) # 4 is the offset in between cards
+                y = col * (CARD_HEIGHT + 4)
+
+                rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
+                image = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+                image.blit(sheet, (0,0), rect)
+
+                cards[(rank, suit)] = image
+        return cards
 
     def draw_main_menu(self):
         """Draw the main menu with mode selection"""
