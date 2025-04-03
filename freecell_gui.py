@@ -6,14 +6,14 @@ from pygame.locals import *
 from freecell_game import FreeCell
 
 # Constants
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 CARD_WIDTH = 71
 CARD_HEIGHT = 96
 MARGIN = 20
-TABLEAU_SPACING = 110
-FREECELL_SPACING = 120
-FOUNDATION_SPACING = 120
+TABLEAU_SPACING = 80
+FREECELL_SPACING = 80
+FOUNDATION_SPACING = 80
 BUTTON_WIDTH = 200
 BUTTON_HEIGHT = 60
 
@@ -27,6 +27,7 @@ BLUE = (25, 21, 109)
 LIGHT_BLUE = (100, 100, 255)
 GRAY = (200, 200, 200)
 DARK_GREEN = (0, 100, 0)
+DARK_GOLD = (105, 109, 21)
 
 class FreeCellGUI:
     def __init__(self):
@@ -37,6 +38,7 @@ class FreeCellGUI:
         self.large_font = pygame.font.SysFont('Copperplate Gothic', 48)
         self.medium_font = pygame.font.SysFont('Copperplate Gothic', 36)
         self.small_font = pygame.font.SysFont('Copperplate Gothic', 24)
+        self.tiny_font = pygame.font.SysFont('Copperplate Gothic', 12)
         
         # Game state
         self.game = None
@@ -112,15 +114,15 @@ class FreeCellGUI:
         self.show_game = True
 
     def draw_game(self):
-        """Draw the actual game interface with cards and clear labels"""
+        """Draw the actual game interface"""
         self.screen.fill(CASINO_GREEN)
         
         # Draw mode indicator
-        mode_text = self.small_font.render(f"Mode: {self.current_mode}", True, WHITE)
-        self.screen.blit(mode_text, (20, 20))
+        mode_text = self.tiny_font.render(f"Mode: {self.current_mode}", True, WHITE)
+        self.screen.blit(mode_text, (10, 10))
         
         # Draw menu button
-        menu_rect = pygame.Rect(SCREEN_WIDTH - 120, 20, 100, 40)
+        menu_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, 10, 100, 40)
         pygame.draw.rect(self.screen, BLUE, menu_rect, border_radius=5)
         menu_text = self.small_font.render("Menu", True, WHITE)
         menu_text_rect = menu_text.get_rect(center=menu_rect.center)
@@ -132,10 +134,10 @@ class FreeCellGUI:
         
         for i in range(4):
             x = MARGIN + FREECELL_SPACING * i
-            y = MARGIN + 50
+            y = MARGIN + 60
             
             # Draw cell background
-            pygame.draw.rect(self.screen, DARK_GREEN, (x, y, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
+            pygame.draw.rect(self.screen, BORDEAUX, (x, y, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
             pygame.draw.rect(self.screen, BLACK, (x, y, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
             
             # Draw cell number
@@ -149,14 +151,14 @@ class FreeCellGUI:
         
         # ===== DRAW FOUNDATIONS WITH LABELS =====
         foundation_label = self.small_font.render("Foundations", True, WHITE)
-        self.screen.blit(foundation_label, (SCREEN_WIDTH - 200, MARGIN + 30))
+        self.screen.blit(foundation_label, (SCREEN_WIDTH - 188, MARGIN + 30))
         
         for i, suit in enumerate(['Hearts', 'Diamonds', 'Clubs', 'Spades']):
-            x = SCREEN_WIDTH - FOUNDATION_SPACING * (4 - i) - CARD_WIDTH - MARGIN
-            y = MARGIN + 50
+            x = SCREEN_WIDTH - FOUNDATION_SPACING * (4 - i) - 12
+            y = MARGIN + 60
             
             # Draw foundation background
-            pygame.draw.rect(self.screen, DARK_GREEN, (x, y, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
+            pygame.draw.rect(self.screen, DARK_GOLD, (x, y, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
             pygame.draw.rect(self.screen, BLACK, (x, y, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
             
             # Draw suit symbol
@@ -179,16 +181,16 @@ class FreeCellGUI:
             
             # Draw pile number
             pile_num = self.small_font.render(str(i+1), True, WHITE)
-            self.screen.blit(pile_num, (x + CARD_WIDTH//2 - 5, y - 20))
+            self.screen.blit(pile_num, (x + CARD_WIDTH//2 - 5, y + 10))
             
             # Draw cards in pile
             if not self.board_state.tableau[i]:
                 # Draw empty pile indicator
-                pygame.draw.rect(self.screen, DARK_GREEN, (x, y, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
-                pygame.draw.rect(self.screen, BLACK, (x, y, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
+                pygame.draw.rect(self.screen, DARK_GREEN, (x, y + 35, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
+                pygame.draw.rect(self.screen, BLACK, (x, y + 35, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
             else:
                 for j, card in enumerate(self.board_state.tableau[i]):
-                    card_y = y + j * 25
+                    card_y = y + 35 + j * 25
                     self.screen.blit(self.card_images[(card.rank, card.suit)], (x, card_y))
         
         # Draw dragged card if any
