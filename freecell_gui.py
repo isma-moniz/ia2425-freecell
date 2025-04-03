@@ -42,7 +42,6 @@ class FreeCellGUI:
         
         # Game state
         self.game = None
-        self.board_state = None
         self.current_mode = None
         self.show_main_menu = True
         self.show_game = False
@@ -108,7 +107,6 @@ class FreeCellGUI:
     def init_game(self, mode):
         """Initialize the game based on selected mode"""
         self.game = FreeCell()
-        self.board_state = self.game.get_board()
         self.current_mode = mode
         self.show_main_menu = False
         self.show_game = True
@@ -145,8 +143,8 @@ class FreeCellGUI:
             self.screen.blit(cell_num, (x + 5, y + 5))
             
             # Draw card if present
-            if self.board_state.free_cells[i]:
-                card = self.board_state.free_cells[i]
+            if self.game.board_state.free_cells[i]:
+                card = self.game.board_state.free_cells[i]
                 self.screen.blit(self.card_images[(card.rank, card.suit)], (x, y))
         
         # ===== DRAW FOUNDATIONS WITH LABELS =====
@@ -167,8 +165,8 @@ class FreeCellGUI:
             self.screen.blit(suit_text, (x + CARD_WIDTH//2 - 5, y + CARD_HEIGHT//2 - 10))
             
             # Draw card if present
-            if self.board_state.foundations[suit]:
-                card = self.board_state.foundations[suit][-1]
+            if self.game.board_state.foundations[suit]:
+                card = self.game.board_state.foundations[suit][-1]
                 self.screen.blit(self.card_images[(card.rank, card.suit)], (x, y))
         
         # ===== DRAW TABLEAU WITH LABELS =====
@@ -184,12 +182,12 @@ class FreeCellGUI:
             self.screen.blit(pile_num, (x + CARD_WIDTH//2 - 5, y + 10))
             
             # Draw cards in pile
-            if not self.board_state.tableau[i]:
+            if not self.game.board_state.tableau[i]:
                 # Draw empty pile indicator
                 pygame.draw.rect(self.screen, DARK_GREEN, (x, y + 35, CARD_WIDTH, CARD_HEIGHT), border_radius=5)
                 pygame.draw.rect(self.screen, BLACK, (x, y + 35, CARD_WIDTH, CARD_HEIGHT), 2, border_radius=5)
             else:
-                for j, card in enumerate(self.board_state.tableau[i]):
+                for j, card in enumerate(self.game.board_state.tableau[i]):
                     card_y = y + 35 + j * 25
                     self.screen.blit(self.card_images[(card.rank, card.suit)], (x, card_y))
         
@@ -209,22 +207,22 @@ class FreeCellGUI:
         # Check free cells (always movable if present)
         for i in range(4):
             cell_x = MARGIN + FREECELL_SPACING * i
-            cell_y = MARGIN + 50
+            cell_y = MARGIN + 60
             if (cell_x <= x <= cell_x + CARD_WIDTH and 
                 cell_y <= y <= cell_y + CARD_HEIGHT and
-                self.board_state.free_cells[i]):
-                return self.board_state.free_cells[i], 'freecell', i
+                self.game.board_state.free_cells[i]):
+                return self.game.board_state.free_cells[i], 'freecell', i
         
-        # Check tableau piles (only top card is movable)
+        # Check tableau piles (only top card is movable) #TODO: for now ;)
         for i in range(8):
             pile_x = MARGIN + TABLEAU_SPACING * i
             pile_y = MARGIN + CARD_HEIGHT + 100
             
             if (pile_x <= x <= pile_x + CARD_WIDTH and 
-                self.board_state.tableau[i]):
-                top_card_y = pile_y + (len(self.board_state.tableau[i]) - 1) * 25
+                self.game.board_state.tableau[i]):
+                top_card_y = pile_y + (len(self.game.board_state.tableau[i]) - 1) * 25
                 if top_card_y <= y <= top_card_y + CARD_HEIGHT:
-                    return self.board_state.tableau[i][-1], 'tableau', i
+                    return self.game.board_state.tableau[i][-1], 'tableau', i
         
         return None, None, None
 
@@ -234,28 +232,29 @@ class FreeCellGUI:
             return
         
         x, y = pos
-        success = False
+        new_game_state = False
         
         # First check if we're in the top area (free cells or foundations)
-        if MARGIN + 50 <= y <= MARGIN + 50 + CARD_HEIGHT:
+        if MARGIN + 60 <= y <= MARGIN + 60 + CARD_HEIGHT:
             # Check free cells first (left side)
             for i in range(4):
                 cell_x = MARGIN + FREECELL_SPACING * i
                 if cell_x <= x <= cell_x + CARD_WIDTH:
-                    if not self.board_state.free_cells[i] and self.origin_pile_type == 'tableau':
-                        success = self.game.move_to_freecell(self.origin_pile)
+                    if not self.game.board_state.free_cells[i] and self.origin_pile_type == 'tableau':
+                        new_game_state = self.game.move_to_freecell(self.origin_pile)
+                        print(f"Dropped card at freecell nr {i + 1}")
                         break
             
             # If not dropped on free cell, check foundations (right side)
-            if not success:
+            if not new_game_state:
                 for i, suit in enumerate(['Hearts', 'Diamonds', 'Clubs', 'Spades']):
-                    foundation_x = SCREEN_WIDTH - FOUNDATION_SPACING * (4 - i) - CARD_WIDTH - MARGIN
+                    foundation_x = SCREEN_WIDTH - FOUNDATION_SPACING * (4 - i) - 12
                     if foundation_x <= x <= foundation_x + CARD_WIDTH:
                         if self.is_valid_foundation_move(self.dragged_card, suit):
                             if self.origin_pile_type == 'freecell':
-                                success = self.game.move_freecell_to_foundation(self.origin_pile)
+                                new_game_state = self.game.move_freecell_to_foundation(self.origin_pile)
                             elif self.origin_pile_type == 'tableau':
-                                success = self.game.move_to_foundation(self.origin_pile)
+                                new_game_state = self.game.move_to_foundation(self.origin_pile)
                         break
         
         # Check tableau drop (main area)
@@ -265,14 +264,14 @@ class FreeCellGUI:
                 if pile_x <= x <= pile_x + CARD_WIDTH:
                     if self.origin_pile_type == 'freecell':
                         if self.is_valid_tableau_move(i, self.dragged_card):
-                            success = self.game.move_to_tableau(self.origin_pile, i)
+                            new_game_state = self.game.move_to_tableau(self.origin_pile, i)
                     elif self.origin_pile_type == 'tableau' and i != self.origin_pile:
                         if self.is_valid_tableau_move(i, self.dragged_card):
-                            success = self.game.move_tableau_to_tableau(self.origin_pile, i)
+                            new_game_state = self.game.move_tableau_to_tableau(self.origin_pile, i)
                     break
         
-        if success:
-            self.board_state = self.game.get_board()
+        if new_game_state:
+            self.game.board_state = new_game_state
         else:
             print(f"Failed to drop card at ({x},{y})")
             print(f"Origin: {self.origin_pile_type} {self.origin_pile}")
@@ -280,10 +279,10 @@ class FreeCellGUI:
 
     def is_valid_tableau_move(self, pile_idx, card):
         """Check if card can be placed on tableau pile"""
-        if not self.board_state.tableau[pile_idx]:
+        if not self.game.board_state.tableau[pile_idx]:
             return True  # Empty pile accepts any card
         
-        top_card = self.board_state.tableau[pile_idx][-1]
+        top_card = self.game.board_state.tableau[pile_idx][-1]
         return (card.value == top_card.value - 1 and 
                 card.color != top_card.color)
 
@@ -291,14 +290,14 @@ class FreeCellGUI:
         """Check if card can be placed on foundation"""
         if card.suit != suit:
             return False
-        if not self.board_state.foundations[suit]:
+        if not self.game.board_state.foundations[suit]:
             return card.rank == 'A'
-        top_card = self.board_state.foundations[suit][-1]
+        top_card = self.game.board_state.foundations[suit][-1]
         return card.value == top_card.value + 1
 
     def handle_game_events(self):
         """Handles all game events including drag-and-drop"""
-        menu_rect = pygame.Rect(SCREEN_WIDTH - 120, 20, 100, 40)
+        menu_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, 10, 100, 40)
         
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -323,10 +322,10 @@ class FreeCellGUI:
                     mouse_x, mouse_y = event.pos
                     if pile_type == 'tableau':
                         card_x = MARGIN + TABLEAU_SPACING * pile_idx
-                        card_y = MARGIN + CARD_HEIGHT + 100 + (len(self.board_state.tableau[pile_idx])-1)*25
+                        card_y = MARGIN + CARD_HEIGHT + 100 + (len(self.game.board_state.tableau[pile_idx])-1)*25
                     else:  # freecell
                         card_x = MARGIN + FREECELL_SPACING * pile_idx
-                        card_y = MARGIN + 50
+                        card_y = MARGIN + 60
                     
                     self.drag_offset_x = mouse_x - card_x
                     self.drag_offset_y = mouse_y - card_y
@@ -343,15 +342,14 @@ class FreeCellGUI:
             elif event.type == KEYDOWN:
                 if event.key == K_u:  # Undo
                     self.game.undo()
-                    self.board_state = self.game.get_board()
+                    # self.game.board_state = self.game.get_board()
                 elif event.key == K_r:  # Reset
                     self.init_game(self.current_mode)
 
     def run_bot_move(self):
         """Execute a single bot move"""
-        if self.current_mode == "bot" and not self.board_state.is_winner():
+        if self.current_mode == "bot" and not self.game.board_state.is_winner():
             self.game.play_bot()
-            self.board_state = self.game.get_board()
 
     def run(self):
         """Main game loop"""
@@ -371,13 +369,12 @@ class FreeCellGUI:
                             self.init_game("bot")
             
             elif self.show_game:
-                self.draw_game()
-                self.handle_game_events()
-                
                 # In bot mode, make moves automatically
                 if self.current_mode == "bot":
-                    self.run_bot_move()
+                    self.run_bot_move() # TODO: this isn't how you do it, need to find a way to retrieve game state
                     pygame.time.delay(500)  # Pause between bot moves
+                self.handle_game_events()
+                self.draw_game()
             
             self.clock.tick(60)
 
