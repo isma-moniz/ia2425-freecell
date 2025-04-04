@@ -109,10 +109,9 @@ class FreeCell:
 
         bot = FreecellBot()
 
-        bot.get_plays(self)
+        for state in bot.get_plays(self):
+            state.display()
 
-        bot.play()
-        return bot
 
     def play_human(self):
         while not self.is_winner():

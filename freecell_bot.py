@@ -563,10 +563,3 @@ class FreecellBot():
 
             self.plays.append(self.start_board)
             self.plays.reverse()
-
-
-
-    def play(self):
-
-        for i in self.plays:
-            i.display()
