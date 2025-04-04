@@ -2,6 +2,7 @@ import heapq
 import copy
 import random
 from copy import deepcopy
+from types import NoneType
 
 from colorama import Fore, Style
 import heapq
@@ -441,6 +442,9 @@ class BotMove():
     def get_previous(self):
         return self.previous
 
+    def is_starting_point(self):
+        return self.board.is_starting_point()
+
     def __lt__(self, other):
         return self.score < other.score
 
@@ -449,34 +453,35 @@ class FreecellBot():
 
     def __init__(self):
         self.queue = MaxPriorityQueue()
+        self.moves = []
         self.plays = []
 
         self.previous = set()
         self.start_board = None
 
-    def get_possible_moves(self, state):
+    def get_possible_moves(self, state, last_move):
 
         for i in range(TABLEAU_COUNT):
 
             #All move to freecell moves
             board = state.clone()
-            if board.move_to_freecell(i): self.queue_move(board, state)
+            if board.move_to_freecell(i): self.queue_move(board, last_move)
 
             #All move to tableau moves
             for o in range(FREECELL_COUNT):
                 board = state.clone()
-                if board.move_to_tableau(o, i): self.queue_move(board, state)
+                if board.move_to_tableau(o, i): self.queue_move(board, last_move)
 
             #All move to foundation moves
             board = state.clone()
-            if board.move_to_foundation(i): self.queue_move(board, state)
+            if board.move_to_foundation(i): self.queue_move(board, last_move)
 
             #Move from one tableau to another
             for o in range(TABLEAU_COUNT):
                 if i == o: continue
 
                 board = state.clone()
-                if board.move_tableau_to_tableau(i, o): self.queue_move(board, state)
+                if board.move_tableau_to_tableau(i, o): self.queue_move(board, last_move)
 
                 #SuperMove
                 """
@@ -488,7 +493,7 @@ class FreecellBot():
         #Move from the freecell to the foundation
         for i in range(FREECELL_COUNT):
             board = state.clone()
-            if board.move_freecell_to_foundation(i): self.queue_move(board, state)
+            if board.move_freecell_to_foundation(i): self.queue_move(board, last_move)
 
     def queue_move(self, board, state):
 
@@ -523,7 +528,7 @@ class FreecellBot():
         self.start_board.set_starting_point()
         self.previous.add(self.start_board)
 
-        self.get_possible_moves(self.start_board)
+        self.get_possible_moves(self.start_board, None)
 
         while self.queue.size() > 0:
 
@@ -538,19 +543,27 @@ class FreecellBot():
 
 
             if state.is_winner():
-                self.plays.append(highest_move)
+                self.moves.append(highest_move)
                 print("Winner!!!")
                 #state.display()
                 break
 
-            state.display()
+            #state.display()
 
-            self.get_possible_moves(state)
+            self.get_possible_moves(state, highest_move)
 
+        if len(self.moves) > 0:
 
+            while self.moves[-1] is not None:
+                self.plays.append(self.moves[-1].get_board())
+                self.moves.append(self.moves[-1].get_previous())
+
+            self.plays.append(self.start_board)
+            self.plays.reverse()
 
 
 
     def play(self):
 
-        print(len(self.plays))
+        for i in self.plays:
+            i.display()

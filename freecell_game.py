@@ -111,6 +111,8 @@ class FreeCell:
 
         bot.get_plays(self)
 
+        bot.play()
+
     def play_human(self):
         while not self.is_winner():
             self.board_state.display()
