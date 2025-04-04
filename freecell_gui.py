@@ -1,4 +1,6 @@
 # gui.py
+import threading
+import queue
 import pygame
 import sys
 from constants import TYPES, RANKS
@@ -45,6 +47,8 @@ class FreeCellGUI:
         self.current_mode = None
         self.show_main_menu = True
         self.show_game = False
+        self.bot_thread = None
+        self.bot_moves = queue.Queue()
         
         # Card dragging
         self.dragging = False
@@ -110,6 +114,17 @@ class FreeCellGUI:
         self.current_mode = mode
         self.show_main_menu = False
         self.show_game = True
+
+        if mode == "bot":
+            self.bot_moves = queue.Queue()
+            self.bot_thread = threading.Thread(target=self.run_bot_thread)
+            self.bot_thread.start()
+
+    def run_bot_thread(self):
+        bot = self.game.play_bot()
+        for state in bot.plays:
+            self.bot_moves.put(state)
+            pygame.time.wait(500)
 
     def draw_game(self):
         """Draw the actual game interface"""
@@ -368,11 +383,15 @@ class FreeCellGUI:
                         elif bot_rect.collidepoint(event.pos):
                             self.init_game("bot")
             
-            elif self.show_game:
-                # In bot mode, make moves automatically
+            if self.show_game:
+                # If in bot mode, process any available move
                 if self.current_mode == "bot":
-                    self.run_bot_move() # TODO: this isn't how you do it, need to find a way to retrieve game state
-                    pygame.time.delay(500)  # Pause between bot moves
+                    try:
+                        new_state = self.bot_moves.get_nowait()
+                        self.game.board_state = new_state
+                    except queue.Empty:
+                        pass
+
                 self.handle_game_events()
                 self.draw_game()
             

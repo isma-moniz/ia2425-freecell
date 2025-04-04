@@ -375,6 +375,7 @@ class BoardState:
                 #print(f"Invalid move: {leftmost_card} cannot be placed on {top_card}!")
                 return False
 
+        #TODO: possible bug, why add cards twice?
         self.tableau[target_tableau_idx].extend(cards_to_move)
 
         for _ in range(no_cards):
