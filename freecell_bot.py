@@ -537,6 +537,8 @@ class FreecellBot():
             highest_move = self.queue.pop()
             state = highest_move.get_board()
 
+            yield state
+
             # print("\n-----------------------------")
             #print("Queue Size: ", self.queue.size())
             #print("Heuristic Value: ", state.calculate_heuristic())

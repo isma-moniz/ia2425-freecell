@@ -6,6 +6,7 @@ import sys
 from constants import TYPES, RANKS
 from pygame.locals import *
 from freecell_game import FreeCell
+from freecell_bot import FreecellBot
 
 # Constants
 SCREEN_WIDTH = 800
@@ -121,10 +122,10 @@ class FreeCellGUI:
             self.bot_thread.start()
 
     def run_bot_thread(self):
-        bot = self.game.play_bot()
-        for state in bot.plays:
+        bot = FreecellBot()
+        for state in bot.get_plays(self.game):
             self.bot_moves.put(state)
-            pygame.time.wait(500)
+            pygame.time.wait(50)
 
     def draw_game(self):
         """Draw the actual game interface"""
