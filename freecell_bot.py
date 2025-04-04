@@ -7,6 +7,9 @@ from colorama import Fore, Style
 import heapq
 from constants import *
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+
 # Cards
 class Card:
     def __init__(self, rank, suit):
@@ -44,33 +47,23 @@ class BoardState:
 
     def __eq__(self, other):
 
-        #print("EQ STARTED")
+        # print("EQ STARTED")
 
         if not isinstance(other, BoardState):
             return False
 
-        # Check tableau equality
-        for i in range(TABLEAU_COUNT):
-            size1 = len(self.tableau[i])
-            size2 = len(other.tableau[i])
-
-            if size1 != size2: return False
-
-            # Compare corresponding cards in tableau
-            for first, second in zip(self.tableau[i], other.tableau[i]):
-                #print("tableau:", first, second)
-                if first != second: return False
+        # Compare corresponding cards in tableau
+        for i in self.tableau:
+            if i not in other.tableau: return False
 
         # Check free cells equality
-        for i, o in zip(self.free_cells, other.free_cells):
-
-            #print("freecell", i, o)
-            if i != o: return False
+        for i in self.free_cells:
+            if i not in other.free_cells: return False
 
         # Check foundations equality: Compare both length and the actual cards in the foundation
         for suit in TYPES:
 
-            #print("foundations", self.foundations[suit], other.foundations[suit])
+            # print("foundations", self.foundations[suit], other.foundations[suit])
 
             if len(self.foundations[suit]) != len(other.foundations[suit]):
                 return False
@@ -78,9 +71,9 @@ class BoardState:
             if self.foundations[suit] != other.foundations[suit]:  # Compare the actual cards in the foundation piles
                 return False
 
-
-        #print("returning true")
+        # print("returning true")
         return True
+
 
     def __hash__(self):
         tableau_hash = hash(tuple(tuple(pile) for pile in self.tableau))
@@ -114,10 +107,6 @@ class BoardState:
     def get_free_cell_score(self):
         """Heuristic score based on the number of empty free cells."""
         return self.free_cells.count(None) * FREECELL_MULTIPLIER  # More empty free cells is better
-
-    def get_empty_tableau_score(self):
-        """Heuristic score based on the number of empty tableau piles."""
-        return sum(1 for pile in self.tableau if not pile)  # More empty tableau piles is better
 
     def get_tableau_order_score(self):
         """Heuristic score based on how well tableau piles are organized."""
@@ -245,12 +234,26 @@ class BoardState:
 
         return 80 / dist
 
+    def get_tableau_empty_score(self):
+
+        score = 0;
+
+        for pile in self.tableau:
+
+            if len(pile) == 0:
+                score += TABLEAU_EMPTY_SCORE * 2;
+                continue
+
+            score += TABLEAU_EMPTY_SCORE / len(pile)
+
+        return score
+
     def calculate_heuristic(self):
         """Combine all the individual scores into one final heuristic score."""
 
         foundation_score = self.get_foundation_score()
         free_cell_score = self.get_free_cell_score()
-        empty_tableau_score = self.get_empty_tableau_score()
+        empty_tableau_score = self.get_tableau_empty_score()
         tableau_order_score = self.get_tableau_order_score()
         card_excavation_score = self.card_excavation_score()
 
@@ -268,7 +271,7 @@ class BoardState:
 
         if win: return VICTORY_SCORE
 
-        total_score = foundation_score + free_cell_score + empty_tableau_score + tableau_order_score + card_excavation_score #- self.move_count
+        total_score = foundation_score + free_cell_score + empty_tableau_score + tableau_order_score + card_excavation_score - self.move_count * MOVE_COUNT_SCORE
         return total_score
 
     def move_to_freecell(self, tableau_idx):
