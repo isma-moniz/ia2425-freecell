@@ -2,7 +2,7 @@ import heapq
 import copy
 import random
 from copy import deepcopy
-from types import NoneType
+from types import NoneType, SimpleNamespace
 
 from colorama import Fore, Style
 import heapq
@@ -29,22 +29,45 @@ class Card:
 
     def __hash__(self):
         return hash((self.rank, self.suit))
+    
+    def __deepcopy__(self, memo):
+        return self
 
 class BoardState:
-    def __init__(self, tableau, free_cells, foundations):
-
+    def __init__(self, tableau, free_cells, foundations, initialize_deck=True):
         self.move_count = 0
         self.tableau = tableau
         self.free_cells = free_cells
         self.foundations = foundations
-        self.deck = [Card(rank, suit) for suit in TYPES for rank in RANKS]
-        self.deck_size = len(self.deck)
-        random.shuffle(self.deck)
-
         self.starting_point = False
-
-
         self.history = []
+        self.current_weights = SimpleNamespace(**DEFAULT_WEIGHTS)
+        
+        if initialize_deck:  # Only initialize deck for new games, not clones
+            self.deck = [Card(rank, suit) for suit in TYPES for rank in RANKS]
+            self.deck_size = len(self.deck)
+            random.shuffle(self.deck)
+        else:  # For cloned states
+            self.deck = None
+            self.deck_size = 0
+            
+        self.update_weights()
+
+    def get_game_phase(board):
+        foundation_progress = sum(len(foundation) for foundation in board.foundations.values()) / 52
+        
+        if foundation_progress < 0.2:
+            return "early"
+        elif foundation_progress < 0.7:
+            return "mid"
+        else:
+            return "late"
+
+    def update_weights(self):
+        phase = self.get_game_phase()
+        # Merge default weights with phase-specific overrides
+        weights = {**DEFAULT_WEIGHTS, **WEIGHT_PROFILES.get(phase, {})}
+        self.current_weights = SimpleNamespace(**weights)
 
     def __eq__(self, other):
 
@@ -93,8 +116,11 @@ class BoardState:
         self.move_count = move_count
 
     def deal_cards(self):
-
-        for i in range(self.deck_size):
+        """Distribute cards to tableau piles only if deck exists"""
+        if not hasattr(self, 'deck') or self.deck is None:
+            return
+            
+        for i in range(len(self.deck)):
             pos = i % TABLEAU_COUNT
             self.tableau[pos].append(self.deck.pop())
 
@@ -102,19 +128,18 @@ class BoardState:
         """Heuristic score based on how many cards are in the foundations."""
         score = 0
         for suit, foundation in self.foundations.items():
-            score += len(foundation) * FOUNDATION_MULTIPLIER  # More cards in foundation is better
+            score += len(foundation) * self.current_weights.FOUNDATION_MULTIPLIER
         return score
 
     def get_free_cell_score(self):
         """Heuristic score based on the number of empty free cells."""
-        return self.free_cells.count(None) * FREECELL_MULTIPLIER  # More empty free cells is better
+        return self.free_cells.count(None) * self.current_weights.FREECELL_MULTIPLIER
 
     def get_tableau_order_score(self):
         """Heuristic score based on how well tableau piles are organized."""
         score = 0
         for pile in self.tableau:
             if pile:
-                # Check if the tableau is organized in descending order, alternating colors
                 valid_sequence = True
                 for i in range(1, len(pile)):
                     prev_card = pile[i - 1]
@@ -123,9 +148,8 @@ class BoardState:
                         valid_sequence = False
                         break
                 if valid_sequence:
-                    score += len(pile)  # More organized tableau piles are better
-        return score * ORDER_MULTIPLIER
-
+                    score += len(pile) * self.current_weights.ORDER_MULTIPLIER
+        return score
 
     def display(self):
         print("\n=== FreeCell Game State ===\n")
@@ -172,7 +196,7 @@ class BoardState:
             else:
                 card = self.foundations[suit][-1]
 
-                if card.value >= 13: continue;
+                if card.value >= 13: continue
                 next_card_val = card.value + 1
 
 
@@ -190,9 +214,9 @@ class BoardState:
                     #This is meant to break stalemates so if there are 2 different cards on the same depth, one will be prefered by the algorithm over another
 
                     if pos == 0:
-                        score += CARD_EXCAVATION_MULTIPLIER * 2
+                        score += self.current_weights.CARD_EXCAVATION_MULTIPLIER * 2
                     else:
-                        score += CARD_EXCAVATION_MULTIPLIER/pos
+                        score += self.current_weights.CARD_EXCAVATION_MULTIPLIER/pos
                     break
 
                 if check: break
@@ -213,7 +237,7 @@ class BoardState:
             else:
                 card = self.foundations[suit][-1]
 
-                if card.value >= 13: continue;
+                if card.value >= 13: continue
                 next_card_val = card.value + 1
 
             check = False
@@ -236,44 +260,31 @@ class BoardState:
         return 80 / dist
 
     def get_tableau_empty_score(self):
-
-        score = 0;
-
+        score = 0
         for pile in self.tableau:
-
             if len(pile) == 0:
-                score += TABLEAU_EMPTY_SCORE * 2;
-                continue
-
-            score += TABLEAU_EMPTY_SCORE / len(pile)
-
+                score += self.current_weights.TABLEAU_EMPTY_SCORE * 2
+            else:
+                score += self.current_weights.TABLEAU_EMPTY_SCORE / len(pile)
         return score
 
     def calculate_heuristic(self):
-        """Combine all the individual scores into one final heuristic score."""
-
+        phase = self.get_game_phase()
+        weights = self.current_weights
+        
         foundation_score = self.get_foundation_score()
         free_cell_score = self.get_free_cell_score()
         empty_tableau_score = self.get_tableau_empty_score()
         tableau_order_score = self.get_tableau_order_score()
         card_excavation_score = self.card_excavation_score()
+        move_penalty = self.move_count * weights.MOVE_COUNT_SCORE
 
-        win = self.is_winner()
+        if self.is_winner():
+            return VICTORY_SCORE
 
-        """
-        print("Foundation Score: ", foundation_score)
-        #print("FreeCell Score: ", free_cell_score)
-        print("Empty_Tableau: ", empty_tableau_score)
-        print("Tableau Order: ", tableau_order_score)
-        print("Move Count: ", self.move_count)
-        print("Are you winning son? ", "Yes dad" if win else "no :(")
-        """
-
-
-        if win: return VICTORY_SCORE
-
-        total_score = foundation_score + free_cell_score + empty_tableau_score + tableau_order_score + card_excavation_score - self.move_count * MOVE_COUNT_SCORE
-        return total_score
+        return (foundation_score + free_cell_score + 
+                empty_tableau_score + tableau_order_score + 
+                card_excavation_score - move_penalty)
 
     def move_to_freecell(self, tableau_idx):
         if self.tableau[tableau_idx]:
@@ -396,10 +407,15 @@ class BoardState:
         return True
 
     def clone(self):
-
-        new_state = BoardState(deepcopy(self.tableau), deepcopy(self.free_cells), deepcopy(self.foundations))
+        """Create a simulation-safe copy without deck operations"""
+        new_state = BoardState(
+            [list(pile) for pile in self.tableau],
+            list(self.free_cells),
+            {suit: list(pile) for suit, pile in self.foundations.items()},
+            initialize_deck=False  # Don't create deck for clones
+        )
         new_state.move_count = self.move_count
-
+        new_state.current_weights = SimpleNamespace(**self.current_weights.__dict__)
         return new_state
 
     def is_winner(self):

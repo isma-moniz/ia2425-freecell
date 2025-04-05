@@ -11,7 +11,12 @@ class FreeCell:
         self.free_cells = [None] * 4
         self.foundations = {suit: [] for suit in TYPES}
 
-        self.board_state = BoardState(self.tableau, self.free_cells, self.foundations)
+        self.board_state = BoardState(
+            [[] for _ in range(TABLEAU_COUNT)],
+            [None]*FREECELL_COUNT,
+            {suit: [] for suit in TYPES},
+            initialize_deck=True 
+        )
         self.board_state.deal_cards()
 
     def get_board(self):
