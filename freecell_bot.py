@@ -48,6 +48,7 @@ class BoardState:
         self.starting_point = False
         self.history = []
         self.current_weights = SimpleNamespace(**DEFAULT_WEIGHTS)
+        self.stagnation_threshold = STAGNATION_THRESHOLD_EARLY
 
         if initialize_deck:  # Only initialize deck for new games, not clones
             self.deck = [Card(rank, suit) for suit in TYPES for rank in RANKS]
@@ -72,6 +73,17 @@ class BoardState:
     def update_weights(self):
         phase = self.get_game_phase()
         # Merge default weights with phase-specific overrides
+
+        match phase:
+            case 'early':
+                self.stagnation_threshold = STAGNATION_THRESHOLD_EARLY
+
+            case 'mid':
+                self.stagnation_threshold = STAGNATION_THRESHOLD_MID
+
+            case 'late':
+                self.stagnation_threshold = STAGNATION_THRESHOLD_LATE
+
         weights = {**DEFAULT_WEIGHTS, **WEIGHT_PROFILES.get(phase, {})}
         self.current_weights = SimpleNamespace(**weights)
 
@@ -558,6 +570,9 @@ class BoardState:
 
     # Now modify the calculate_heuristic method to include these new evaluations
     def calculate_heuristic(self, apply_bonus=True):
+
+        self.update_weights()
+
         # Original scores
         foundation_score = self.get_foundation_score()
         free_cell_score = self.get_free_cell_score()
@@ -593,8 +608,8 @@ class BoardState:
         )
 
         if apply_bonus:
-            if (len(prev_scores) == 10):
-                stagnation = (max(prev_scores) - min(prev_scores)) < STAGNATION_THRESHOLD
+            if len(prev_scores) == 10:
+                stagnation = (max(prev_scores) - min(prev_scores)) < self.stagnation_threshold
                 if stagnation:
                     print("stagnated")
                     print(prev_scores)
@@ -603,10 +618,13 @@ class BoardState:
 
             if stagnation:
                 print("Calling dfs!")
-                for depth in range(2,6):
-                    bonus = self.improved_look_ahead_score_boost(depth)
-                    if bonus > STAGNATION_THRESHOLD * 2:
-                        break
+                dep = 2
+                bonus = 0
+                while bonus < self.stagnation_threshold:
+                    bonus = self.improved_look_ahead_score_boost(dep)
+                    dep += 1
+
+                print("Depth needed:", dep)
                 total_score = base_score + bonus
             else:
                 total_score = base_score
