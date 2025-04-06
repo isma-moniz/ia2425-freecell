@@ -14,9 +14,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 prev_scores = []
-
-previousSet = set()
-
 # Cards
 class Card:
     def __init__(self, rank, suit):
@@ -504,7 +501,7 @@ class BoardState:
         # Generate all possible moves (same as original)
         for i in range(TABLEAU_COUNT):
             new_state = self.clone()
-            if new_state.move_to_freecell(i) and new_state not in visited and new_state not in previousSet:
+            if new_state.move_to_freecell(i) and new_state not in visited:
                 next_states.append(new_state)
 
             new_state = self.clone()
@@ -516,19 +513,19 @@ class BoardState:
 
             for j in range(FREECELL_COUNT):
                 new_state = self.clone()
-                if new_state.move_to_tableau(j, i) and new_state not in visited and new_state not in previousSet:
+                if new_state.move_to_tableau(j, i) and new_state not in visited:
                     next_states.append(new_state)
 
             for j in range(TABLEAU_COUNT):
                 if i == j: continue
 
                 new_state = self.clone()
-                if new_state.move_tableau_to_tableau(i, j) and new_state not in visited and new_state not in previousSet:
+                if new_state.move_tableau_to_tableau(i, j) and new_state not in visited:
                     next_states.append(new_state)
 
         for j in range(FREECELL_COUNT):
             new_state = self.clone()
-            if new_state.move_freecell_to_foundation(j) and new_state not in visited and new_state not in previousSet:
+            if new_state.move_freecell_to_foundation(j) and new_state not in visited:
                 next_states.append(new_state)
                 # Early termination - if moving to foundation creates a winning state
                 if new_state.is_winner():
@@ -600,7 +597,6 @@ class BoardState:
                     print(prev_scores)
             else: 
                 stagnation = False
-
             if stagnation:
                 print("Calling dfs!")
                 for depth in range(2,6):
@@ -610,9 +606,7 @@ class BoardState:
                 total_score = base_score + bonus
             else:
                 total_score = base_score
-
             prev_scores.append(total_score)
-
             if len(prev_scores) > 10:
                 prev_scores.pop(0)
         else:
@@ -804,10 +798,12 @@ class FreecellBot():
 
     def __init__(self):
         self.start_time = time.time()
+        self.execution_time = None
         self.queue = MaxPriorityQueue()
         self.moves = []
         self.plays = []
 
+        self.previous = set()
         self.start_board = None
 
     def get_possible_moves(self, state, last_move):
@@ -848,7 +844,7 @@ class FreecellBot():
 
     def queue_move(self, board, state):
 
-        for b in previousSet:
+        for b in self.previous:
             if b == board:
                 """
                 board.display()
@@ -867,17 +863,17 @@ class FreecellBot():
         board.display()
         """
 
-        previousSet.add(board)
+        self.previous.add(board)
         self.queue.push(BotMove(board, state))
 
     def get_plays(self, freecell):
 
         self.plays.clear()
-        previousSet.clear()
+        self.previous.clear()
 
         self.start_board = freecell.get_board()
         self.start_board.set_starting_point()
-        previousSet.add(self.start_board)
+        self.previous.add(self.start_board)
 
         self.get_possible_moves(self.start_board, None)
 
@@ -892,15 +888,15 @@ class FreecellBot():
             # print("\n-----------------------------")
             #print("Queue Size: ", self.queue.size())
             print("Heuristic Value: ", state.calculate_heuristic())
-           # print("Previous Size: ", len(previousSet))
+           # print("Previous Size: ", len(self.previous))
 
 
             if state.is_winner():
                 stop_time = time.time()
-                execution_time = stop_time - self.start_time
+                self.execution_time = stop_time - self.start_time
                 self.moves.append(highest_move)
                 print("Winner!!!")
-                print(f"Run time: {execution_time:.4f} seconds")
+                print(f"Run time: {self.execution_time:.4f} seconds")
                 #state.display()
                 break
 

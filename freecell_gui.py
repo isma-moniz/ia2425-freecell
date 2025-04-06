@@ -1,6 +1,7 @@
 # gui.py
 import threading
 import queue
+import time
 import pygame
 import sys
 from constants import TYPES, RANKS
@@ -31,6 +32,7 @@ LIGHT_BLUE = (100, 100, 255)
 GRAY = (200, 200, 200)
 DARK_GREEN = (0, 100, 0)
 DARK_GOLD = (105, 109, 21)
+VICTORY_COLOR_GOLD = (255, 215, 0)
 
 class FreeCellGUI:
     def __init__(self):
@@ -45,11 +47,13 @@ class FreeCellGUI:
         
         # Game state
         self.game = None
+        self.bot = None
         self.current_mode = None
         self.show_main_menu = True
         self.show_game = False
         self.bot_thread = None
         self.bot_moves = queue.Queue()
+        self.show_victory = False
         
         # Card dragging
         self.dragging = False
@@ -62,6 +66,11 @@ class FreeCellGUI:
 
         # Load card images
         self.card_images = self.load_card_spritesheet()
+
+        # Human timer
+        self.human_start_time = 0
+        self.human_mode_timer = 0
+        self.timer_font = pygame.font.SysFont('Arial', 20)
 
     def load_card_spritesheet(self):
         sheet = pygame.image.load("sprites/cards.png").convert()
@@ -115,21 +124,36 @@ class FreeCellGUI:
         self.current_mode = mode
         self.show_main_menu = False
         self.show_game = True
+        self.show_victory = False
 
-        if mode == "bot":
+        # Start timer for human mode
+        if mode == "human":
+            self.human_start_time = time.time()
+
+        elif mode == "bot":
             self.bot_moves = queue.Queue()
             self.bot_thread = threading.Thread(target=self.run_bot_thread)
             self.bot_thread.start()
 
     def run_bot_thread(self):
-        bot = FreecellBot()
-        for state in bot.get_plays(self.game):
+        self.bot = FreecellBot()
+        for state in self.bot.get_plays(self.game):
             self.bot_moves.put(state)
             #pygame.time.wait(50)
 
     def draw_game(self):
         """Draw the actual game interface"""
         self.screen.fill(CASINO_GREEN)
+
+        # Draw timer in human mode
+        if self.current_mode == "human" and not self.game.board_state.is_winner():
+            self.human_mode_timer = time.time() - self.human_start_time
+            timer_text = self.timer_font.render(
+                f"Time: {self.human_mode_timer:.2f}", 
+                True, 
+                WHITE
+            )
+            self.screen.blit(timer_text, (SCREEN_WIDTH - 150, 10))
         
         # Draw mode indicator
         mode_text = self.tiny_font.render(f"Mode: {self.current_mode}", True, WHITE)
@@ -215,6 +239,38 @@ class FreeCellGUI:
         
         pygame.display.flip()
         return menu_rect
+    
+    def draw_victory_screen(self):
+        """Simplified victory screen showing seconds"""
+        self.screen.fill(CASINO_GREEN)
+        
+        # Get time in seconds (bot) or fallback to human timer
+        elapsed = (self.bot.execution_time if hasattr(self, 'bot') and self.bot.execution_time 
+                else time.time() - self.human_start_time)
+        time_text = f"Time: {elapsed:.2f} seconds"
+        
+        # Create text elements
+        elements = [
+            (self.large_font.render("You Won!", True, VICTORY_COLOR_GOLD)),
+            (self.medium_font.render(time_text, True, WHITE)),
+            (self.medium_font.render(f"Moves: {self.game.board_state.move_count}", True, WHITE))
+        ]
+        
+        # Draw all elements centered
+        y_pos = SCREEN_HEIGHT // 3
+        for element in elements:
+            rect = element.get_rect(center=(SCREEN_WIDTH//2, y_pos))
+            self.screen.blit(element, rect)
+            y_pos += 60
+        
+        # Draw menu button
+        btn_rect = pygame.Rect(SCREEN_WIDTH//2 - 100, y_pos, 200, 50)
+        pygame.draw.rect(self.screen, BLUE, btn_rect, border_radius=5)
+        btn_text = self.medium_font.render("Menu", True, WHITE)
+        self.screen.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
+        
+        pygame.display.flip()
+        return btn_rect
 
     def get_card_at_pos(self, pos):
         """Returns the top card at given position if it's movable"""
@@ -384,17 +440,40 @@ class FreeCellGUI:
                         elif bot_rect.collidepoint(event.pos):
                             self.init_game("bot")
             
-            if self.show_game:
-                # If in bot mode, process any available move
+            elif self.show_game:
+                # Then update game state
                 if self.current_mode == "bot":
                     try:
                         new_state = self.bot_moves.get_nowait()
                         self.game.board_state = new_state
+                        if self.game.board_state.is_winner():
+                            self.show_victory = True
+                            self.show_game = False
                     except queue.Empty:
                         pass
-
+                
+                # Check for human victory
+                elif self.current_mode == "human" and self.game.board_state.is_winner():
+                    self.show_victory = True
+                    self.show_game = False
+                
+                # Draw the game
                 self.handle_game_events()
                 self.draw_game()
+            
+            elif self.show_victory:
+                # Handle victory screen events
+                menu_rect = self.draw_victory_screen()
+                
+                for event in pygame.event.get():
+                    if event.type == QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    
+                    if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                        if menu_rect.collidepoint(event.pos):
+                            self.show_main_menu = True
+                            self.show_victory = False
             
             self.clock.tick(60)
 

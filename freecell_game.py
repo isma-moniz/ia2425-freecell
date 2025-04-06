@@ -131,7 +131,6 @@ class FreeCell:
 
         return average_time
 
-
     def play_human(self):
         while not self.is_winner():
             self.board_state.display()
