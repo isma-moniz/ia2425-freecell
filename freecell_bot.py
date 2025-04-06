@@ -16,6 +16,7 @@ THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 prev_scores = []
 
 previousSet = set()
+dfsPenalty = 0
 
 # Cards
 class Card:
@@ -286,84 +287,8 @@ class BoardState:
             else:
                 score += self.current_weights.TABLEAU_EMPTY_SCORE / len(pile)
         return score
-    
-    def get_lookahead_bonus(self, max_depth=2):
-        """
-        Computes the bonus score from lookahead with improved efficiency and adaptability.
-        Dynamically adjusts depth based on game state complexity and adjusts the bonus
-        to prevent overly greedy short-term moves.
-        Terminates search early if a winning state is found.
 
-        Parameters:
-        - max_depth: Maximum search depth (will be adjusted based on game state)
 
-        Returns:
-        - A weighted bonus score if a better future state is found, or VICTORY_SCORE if a winning state is found
-        """
-        # Calculate base score without lookahead to avoid recursion
-        current_score = self.calculate_heuristic(False)
-
-        # Return immediately if this is already a winning state
-        if self.is_winner() or current_score >= VICTORY_SCORE:
-            return VICTORY_SCORE
-
-        # Adjust search depth based on game phase and available empty cells
-        phase = self.get_game_phase()
-        empty_cells, empty_cascades = self.get_empty_cells_and_cascades()
-
-        # Deeper search when we have more space to work with
-        adjusted_depth = max_depth
-        if empty_cells >= 2 or empty_cascades >= 1:
-            adjusted_depth += 1
-
-        # Deeper in late game when decisions are more critical
-        if phase == "late":
-            adjusted_depth += 1
-
-        # Limit depth if board is too complex to avoid timeout
-        card_count = sum(len(pile) for pile in self.tableau)
-        if card_count > 40:  # Still many cards on the tableau
-            adjusted_depth = min(adjusted_depth, 1)
-
-        # Use the improved lookahead function
-        if hasattr(self, 'improved_look_ahead_score_boost'):
-            best_future_score = self.improved_look_ahead_score_boost(adjusted_depth, 0)
-        else:
-            # Fallback to original if improved version not available
-            best_future_score = self.look_ahead_score_boost(adjusted_depth, 0)
-
-        # If a winning state was found, return victory score immediately
-        if best_future_score >= VICTORY_SCORE:
-            return VICTORY_SCORE
-
-        # Calculate raw bonus
-        raw_bonus = best_future_score - current_score
-
-        # Apply diminishing returns to prevent greediness
-        if raw_bonus > 0:
-            # Scale bonus based on game phase
-            if phase == "early":
-                # Early game: moderate lookahead influence
-                bonus = raw_bonus * 0.6
-            elif phase == "mid":
-                # Mid game: higher lookahead influence
-                bonus = raw_bonus * 0.8
-            else:
-                # Late game: strong lookahead influence
-                bonus = raw_bonus * 0.9
-
-            # Apply logarithmic scaling to very large bonuses
-            if bonus > 50:
-                bonus = 50 + math.log(bonus - 50 + 1, 2) * 10
-
-            return bonus
-        else:
-            # Small negative bonus for states that lead to worse positions
-            # This helps avoid moves that look good now but lead to problems
-            return max(-10, raw_bonus * 0.3)
-        
-    def is_new_state(self, visited):
-        return not any(self == v for v in visited)
 
     def get_sequential_chains_score(self):
         """Reward long sequential chains that are correctly ordered and can be moved together."""
@@ -611,7 +536,8 @@ class BoardState:
             if len(prev_scores) == 10:
                 stagnation = (max(prev_scores) - min(prev_scores)) < self.stagnation_threshold
                 if stagnation:
-                    print("stagnated")
+                    print("Base Score", base_score)
+                    print("stagnated", max(prev_scores) - min(prev_scores))
                     print(prev_scores)
             else: 
                 stagnation = False
@@ -619,17 +545,18 @@ class BoardState:
             if stagnation:
                 print("Calling dfs!")
                 dep = 2
-                bonus = 0
-                while bonus < self.stagnation_threshold:
-                    bonus = self.improved_look_ahead_score_boost(dep)
+                new_score = 0
+                while new_score < base_score + self.stagnation_threshold:
+                    new_score = self.improved_look_ahead_score_boost(max_depth=dep)
+                    print("current dep", dep)
                     dep += 1
 
+                print("New Score", new_score)
                 print("Depth needed:", dep)
-                total_score = base_score + bonus
+                total_score = new_score
+                print("Total Score:", total_score)
             else:
                 total_score = base_score
-
-            prev_scores.append(total_score)
 
             if len(prev_scores) > 10:
                 prev_scores.pop(0)
@@ -909,7 +836,7 @@ class FreecellBot():
 
             # print("\n-----------------------------")
             #print("Queue Size: ", self.queue.size())
-            print("Heuristic Value: ", state.calculate_heuristic())
+            print("Heuristic Value: ", highest_move.get_score())
            # print("Previous Size: ", len(previousSet))
 
 
@@ -925,6 +852,7 @@ class FreecellBot():
             #state.display()
 
             self.get_possible_moves(state, highest_move)
+            prev_scores.append(highest_move.get_score())
 
         if len(self.moves) > 0:
 
