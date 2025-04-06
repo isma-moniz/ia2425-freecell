@@ -1,6 +1,7 @@
 import copy
 from freecell_bot import BoardState, FreecellBot
 from constants import *
+import time
 
 
 # Freecell logic
@@ -11,7 +12,7 @@ class FreeCell:
         self.free_cells = [None] * 4
         self.foundations = {suit: [] for suit in TYPES}
 
-        self.board_state = BoardState(self.tableau, self.free_cells, self.foundations)
+        self.board_state = BoardState(self.tableau, self.free_cells, self.foundations, initialize_deck=True)
         self.board_state.deal_cards()
 
     def get_board(self):
@@ -107,10 +108,28 @@ class FreeCell:
 
     def play_bot(self):
 
-        bot = FreecellBot()
+        total_time = 0
+        runs = 50
 
-        for state in bot.get_plays(self):
-            state.display()
+        for i in range(runs):
+            start_time = time.time()
+
+            self.board_state.deal_cards()
+
+            bot = FreecellBot()
+            bot.get_plays(self)
+            #bot.play()
+
+            end_time = time.time()
+            execution_time = end_time - start_time
+            total_time += execution_time
+
+            print(f"Run {i + 1}: {execution_time:.4f} seconds")
+
+        average_time = total_time / runs
+        print(f"\nAverage execution time over {runs} runs: {average_time:.4f} seconds\n\n\n")
+
+        return average_time
 
 
     def play_human(self):

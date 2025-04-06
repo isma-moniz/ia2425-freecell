@@ -125,7 +125,7 @@ class FreeCellGUI:
         bot = FreecellBot()
         for state in bot.get_plays(self.game):
             self.bot_moves.put(state)
-            pygame.time.wait(50)
+            #pygame.time.wait(50)
 
     def draw_game(self):
         """Draw the actual game interface"""
