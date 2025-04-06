@@ -93,7 +93,7 @@ class FreeCellGUI:
                                SCREEN_HEIGHT//2 - BUTTON_HEIGHT, 
                                BUTTON_WIDTH, BUTTON_HEIGHT)
         pygame.draw.rect(self.screen, BORDEAUX, human_rect, border_radius=10)
-        human_text = self.medium_font.render("Human", True, BLACK)
+        human_text = self.medium_font.render("Human", True, WHITE)
         human_text_rect = human_text.get_rect(center=human_rect.center)
         self.screen.blit(human_text, human_text_rect)
         
@@ -102,7 +102,7 @@ class FreeCellGUI:
                              SCREEN_HEIGHT//2 + BUTTON_HEIGHT, 
                              BUTTON_WIDTH, BUTTON_HEIGHT)
         pygame.draw.rect(self.screen, BLUE, bot_rect, border_radius=10)
-        bot_text = self.medium_font.render("Bot", True, BLACK)
+        bot_text = self.medium_font.render("Bot", True, WHITE)
         bot_text_rect = bot_text.get_rect(center=bot_rect.center)
         self.screen.blit(bot_text, bot_text_rect)
         
@@ -287,6 +287,8 @@ class FreeCellGUI:
                     break
         
         if new_game_state:
+
+            self.game.save_state()
             self.game.board_state = new_game_state
         else:
             print(f"Failed to drop card at ({x},{y})")
@@ -358,6 +360,7 @@ class FreeCellGUI:
             elif event.type == KEYDOWN:
                 if event.key == K_u:  # Undo
                     self.game.undo()
+                    self.draw_game()
                     # self.game.board_state = self.game.get_board()
                 elif event.key == K_r:  # Reset
                     self.init_game(self.current_mode)

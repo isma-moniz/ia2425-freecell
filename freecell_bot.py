@@ -5,6 +5,8 @@ import math
 import random
 from copy import deepcopy
 from types import NoneType, SimpleNamespace
+import psutil
+import os
 
 from colorama import Fore, Style
 import heapq
@@ -49,6 +51,8 @@ class BoardState:
         self.history = []
         self.current_weights = SimpleNamespace(**DEFAULT_WEIGHTS)
         self.stagnation_threshold = STAGNATION_THRESHOLD_EARLY
+
+        self.move_string = ""
 
         if initialize_deck:  # Only initialize deck for new games, not clones
             self.deck = [Card(rank, suit) for suit in TYPES for rank in RANKS]
@@ -286,84 +290,7 @@ class BoardState:
             else:
                 score += self.current_weights.TABLEAU_EMPTY_SCORE / len(pile)
         return score
-    
-    def get_lookahead_bonus(self, max_depth=2):
-        """
-        Computes the bonus score from lookahead with improved efficiency and adaptability.
-        Dynamically adjusts depth based on game state complexity and adjusts the bonus
-        to prevent overly greedy short-term moves.
-        Terminates search early if a winning state is found.
 
-        Parameters:
-        - max_depth: Maximum search depth (will be adjusted based on game state)
-
-        Returns:
-        - A weighted bonus score if a better future state is found, or VICTORY_SCORE if a winning state is found
-        """
-        # Calculate base score without lookahead to avoid recursion
-        current_score = self.calculate_heuristic(False)
-
-        # Return immediately if this is already a winning state
-        if self.is_winner() or current_score >= VICTORY_SCORE:
-            return VICTORY_SCORE
-
-        # Adjust search depth based on game phase and available empty cells
-        phase = self.get_game_phase()
-        empty_cells, empty_cascades = self.get_empty_cells_and_cascades()
-
-        # Deeper search when we have more space to work with
-        adjusted_depth = max_depth
-        if empty_cells >= 2 or empty_cascades >= 1:
-            adjusted_depth += 1
-
-        # Deeper in late game when decisions are more critical
-        if phase == "late":
-            adjusted_depth += 1
-
-        # Limit depth if board is too complex to avoid timeout
-        card_count = sum(len(pile) for pile in self.tableau)
-        if card_count > 40:  # Still many cards on the tableau
-            adjusted_depth = min(adjusted_depth, 1)
-
-        # Use the improved lookahead function
-        if hasattr(self, 'improved_look_ahead_score_boost'):
-            best_future_score = self.improved_look_ahead_score_boost(adjusted_depth, 0)
-        else:
-            # Fallback to original if improved version not available
-            best_future_score = self.look_ahead_score_boost(adjusted_depth, 0)
-
-        # If a winning state was found, return victory score immediately
-        if best_future_score >= VICTORY_SCORE:
-            return VICTORY_SCORE
-
-        # Calculate raw bonus
-        raw_bonus = best_future_score - current_score
-
-        # Apply diminishing returns to prevent greediness
-        if raw_bonus > 0:
-            # Scale bonus based on game phase
-            if phase == "early":
-                # Early game: moderate lookahead influence
-                bonus = raw_bonus * 0.6
-            elif phase == "mid":
-                # Mid game: higher lookahead influence
-                bonus = raw_bonus * 0.8
-            else:
-                # Late game: strong lookahead influence
-                bonus = raw_bonus * 0.9
-
-            # Apply logarithmic scaling to very large bonuses
-            if bonus > 50:
-                bonus = 50 + math.log(bonus - 50 + 1, 2) * 10
-
-            return bonus
-        else:
-            # Small negative bonus for states that lead to worse positions
-            # This helps avoid moves that look good now but lead to problems
-            return max(-10, raw_bonus * 0.3)
-        
-    def is_new_state(self, visited):
-        return not any(self == v for v in visited)
 
     def get_sequential_chains_score(self):
         """Reward long sequential chains that are correctly ordered and can be moved together."""
@@ -610,21 +537,18 @@ class BoardState:
         if apply_bonus:
             if len(prev_scores) == 10:
                 stagnation = (max(prev_scores) - min(prev_scores)) < self.stagnation_threshold
-                if stagnation:
-                    print("stagnated")
-                    print(prev_scores)
             else: 
                 stagnation = False
 
             if stagnation:
-                print("Calling dfs!")
+                #print("Calling dfs!")
                 dep = 2
                 bonus = 0
                 while bonus < base_score + 5 - dep and dep < 5:
                     bonus = self.improved_look_ahead_score_boost(dep)
                     dep += 1
 
-                print("Depth needed:", dep)
+                #print("Depth needed:", dep)
                 total_score = bonus
             else:
                 total_score = base_score
@@ -646,6 +570,7 @@ class BoardState:
                     card = self.tableau[tableau_idx].pop()
                     self.free_cells[i] = card
                     #print(f"Moved {card} to free cell {i + 1}")
+                    self.move_string += f"\nMoved {card} to free cell {i + 1}"
                     self.move_count += 1
                     return True
 
@@ -658,6 +583,7 @@ class BoardState:
             self.tableau[tableau_idx].append(card)
             self.free_cells[freecell_idx] = None
             #print(f"Moved {card} to tableau {tableau_idx + 1}")
+            self.move_string += f"\nMoved {card} to tableau {tableau_idx + 1}"
             self.move_count += 1
             return True
         #print("Invalid move!")
@@ -671,7 +597,8 @@ class BoardState:
 
                 self.tableau[to_idx].append(self.tableau[from_idx].pop())
 
-                #print(f"Moved {card} from tableau {from_idx + 1} to {to_idx + 1} ({previous_card})")
+                #print(f"Moved {card} from tableau {from_idx + 1} to {to_idx + 1}")
+                self.move_string += f"\nMoved {card} from tableau {from_idx + 1} to {to_idx + 1}"
                 self.move_count += 1
                 return True
         #print("Invalid move!")
@@ -691,6 +618,7 @@ class BoardState:
                 self.foundations[card.suit].append(card)
                 self.tableau[tableau_idx].pop()
                 #print(f"Moved {card} to foundation {card.suit}")
+                self.move_string += f"\nMoved {card} to foundation {card.suit}"
                 self.move_count += 1
                 return True
         #print("Invalid move!")
@@ -702,6 +630,7 @@ class BoardState:
             self.foundations[card.suit].append(card)
             self.free_cells[freecell_idx] = None
             #print(f"Moved {card} to foundation {card.suit}")
+            self.move_string += f"\nMoved {card} to foundation {card.suit}"
             self.move_count += 1
             return True
         #print("Invalid move!")
@@ -768,6 +697,7 @@ class BoardState:
             initialize_deck=False  # Don't create deck for clones
         )
         new_state.move_count = self.move_count
+        new_state.move_string = self.move_string
         new_state.current_weights = SimpleNamespace(**self.current_weights.__dict__)
         return new_state
 
@@ -862,12 +792,6 @@ class FreecellBot():
                 board = state.clone()
                 if board.move_tableau_to_tableau(i, o): self.queue_move(board, last_move)
 
-                #SuperMove
-                """
-                for cardsCount in range(len(state.tableau[i])):
-                    board = state.clone()
-                    if board.move_supermove(i, o, cardsCount): self.queue_move(board, state)
-                """
 
         #Move from the freecell to the foundation
         for i in range(FREECELL_COUNT):
@@ -876,24 +800,8 @@ class FreecellBot():
 
     def queue_move(self, board, state):
 
-        for b in previousSet:
-            if b == board:
-                """
-                board.display()
-                b.display()
-                self.start_board.display()
+        if board in previousSet: return
 
-                print(len(self.previous))
-                print(board, b)
-                """
-
-                return
-
-        """
-        print("added")
-
-        board.display()
-        """
 
         previousSet.add(board)
         self.queue.push(BotMove(board, state))
@@ -909,6 +817,9 @@ class FreecellBot():
 
         self.get_possible_moves(self.start_board, None)
 
+        process = psutil.Process(os.getpid())
+        mem_before = process.memory_info().rss  # in bytes
+
         while self.queue.size() > 0:
 
 
@@ -919,7 +830,7 @@ class FreecellBot():
 
             # print("\n-----------------------------")
             #print("Queue Size: ", self.queue.size())
-            print("Heuristic Value: ", state.calculate_heuristic())
+            #print("Heuristic Value: ", state.calculate_heuristic())
            # print("Previous Size: ", len(previousSet))
 
 
@@ -927,14 +838,15 @@ class FreecellBot():
                 stop_time = time.time()
                 execution_time = stop_time - self.start_time
                 self.moves.append(highest_move)
-                print("Winner!!!")
-                print(f"Run time: {execution_time:.4f} seconds")
+                #print("Winner!!!")
+                #print(f"Run time: {execution_time:.4f} seconds")
                 #state.display()
                 break
 
             #state.display()
 
             self.get_possible_moves(state, highest_move)
+
 
         if len(self.moves) > 0:
 
@@ -944,3 +856,12 @@ class FreecellBot():
 
             self.plays.append(self.start_board)
             self.plays.reverse()
+
+        mem_after = process.memory_info().rss
+
+        print("\nWINNING MOVES: ")
+        print(state.move_string)
+
+        print("\nMemory usage before bot Algorithm: {:.2f} MB".format(mem_before / 1024 ** 2))
+        print("Memory usage after bot Algorithm: {:.2f} MB".format(mem_after / 1024 ** 2))
+

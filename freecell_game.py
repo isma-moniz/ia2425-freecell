@@ -1,4 +1,6 @@
 import copy
+from copy import deepcopy
+
 from freecell_bot import BoardState, FreecellBot
 from constants import *
 import time
@@ -14,6 +16,7 @@ class FreeCell:
 
         self.board_state = BoardState(self.tableau, self.free_cells, self.foundations, initialize_deck=True)
         self.board_state.deal_cards()
+        self.history = []
 
     def get_board(self):
         return self.board_state
@@ -82,7 +85,7 @@ class FreeCell:
         return self.board_state.is_winner()
 
     def save_state(self):
-        self.history.append(copy.deepcopy((self.tableau, self.free_cells, self.foundations)))
+        self.history.append((deepcopy(self.tableau), deepcopy(self.free_cells), deepcopy(self.foundations)))
 
     def undo(self):
         if self.history:
@@ -90,6 +93,7 @@ class FreeCell:
             print("Undo successful!")
         else:
             print("No moves to undo!")
+
 
     def get_empty_cells_and_cascades(self):
         return self.board_state.get_empty_cells_and_cascades()
@@ -106,85 +110,3 @@ class FreeCell:
     def clone_boardState(self):
         return self.board_state.clone()
 
-    def play_bot(self):
-
-        total_time = 0
-        runs = 50
-
-        for i in range(runs):
-            start_time = time.time()
-
-            self.board_state.deal_cards()
-
-            bot = FreecellBot()
-            bot.get_plays(self)
-            #bot.play()
-
-            end_time = time.time()
-            execution_time = end_time - start_time
-            total_time += execution_time
-
-            print(f"Run {i + 1}: {execution_time:.4f} seconds")
-
-        average_time = total_time / runs
-        print(f"\nAverage execution time over {runs} runs: {average_time:.4f} seconds\n\n\n")
-
-        return average_time
-
-
-    def play_human(self):
-        while not self.is_winner():
-            self.board_state.display()
-
-            print("\n" + str(self.board_state.calculate_heuristic()) + "\n")
-
-            print("\nMove types:")
-            print(" - freecell [tableau_index]: Move top card from tableau to freecell")
-            print(" - tableau [freecell_index] [tableau_index]: Move card from freecell to tableau")
-            print(" - move [from_tableau] [to_tableau]: Move card from one tableau column to another")
-            print(" - foundation [tableau_index]: Move top card from tableau to foundation")
-            print(" - freecell-foundation [freecell_index]: Move card from freecell to foundation")
-            print(" - undo: return to your last move")
-            print(" - supermove [from_tableau] [to_tableau] [num_cards(negative)]: Move a sequence of cards from tableau")
-            print(" - quit: Exit the game")
-            move = input("Enter move: ")
-
-            parts = move.split()
-
-            temp = None
-
-            if parts[0] == "freecell" and len(parts) == 2:
-
-                temp = self.move_to_freecell(int(parts[1]) - 1)
-
-            elif parts[0] == "tableau" and len(parts) == 3:
-
-                temp =  self.move_to_tableau(int(parts[1]) - 1, int(parts[2]) - 1)
-
-            elif parts[0] == "move" and len(parts) == 3:
-
-                temp = self.move_tableau_to_tableau(int(parts[1]) - 1, int(parts[2]) - 1)
-
-            elif parts[0] == "foundation" and len(parts) == 2:
-
-                temp = self.move_to_foundation(int(parts[1]) - 1)
-
-            elif parts[0] == "freecell-foundation" and len(parts) == 2:
-
-                temp = self.move_freecell_to_foundation(int(parts[1]) - 1)
-
-            elif parts[0] == "supermove" and len(parts) == 4:
-
-                temp = self.move_supermove(int(parts[1]) - 1, int(parts[2]) - 1, int(parts[3]))
-
-            elif parts[0] == 'undo':
-                self.undo()
-            elif parts[0] == "quit":
-                break
-            else:
-                print("Invalid command!")
-
-            if temp is not None:
-                self.board_state = temp
-
-        print("Game Over!")
