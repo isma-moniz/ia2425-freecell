@@ -16,7 +16,7 @@ THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 prev_scores = []
 
 previousSet = set()
-dfsPenalty = 0
+
 
 # Cards
 class Card:
@@ -50,6 +50,8 @@ class BoardState:
         self.history = []
         self.current_weights = SimpleNamespace(**DEFAULT_WEIGHTS)
         self.stagnation_threshold = STAGNATION_THRESHOLD_EARLY
+
+        self.DFSPenalty = 0
 
         if initialize_deck:  # Only initialize deck for new games, not clones
             self.deck = [Card(rank, suit) for suit in TYPES for rank in RANKS]
@@ -155,7 +157,7 @@ class BoardState:
         """Heuristic score based on the number of empty free cells."""
         return self.free_cells.count(None) * self.current_weights.FREECELL_MULTIPLIER
 
-    #TODO: maybe give some score, even if only part of the pile is organized
+
     def get_tableau_order_score(self):
         """Heuristic score based on how well tableau piles are organized."""
         score = 0
@@ -476,10 +478,18 @@ class BoardState:
 
         # Only consider the top N states to improve search efficiency
         top_n = len(next_states) #min(8, len(next_states))
+        if top_n == 0: return LOOSE_SCORE
+        
+        non_loose = 0
 
         for next_state in next_states[:top_n]:
             # Alpha-beta pruning
             score = next_state.improved_look_ahead_score_boost(max_depth, current_depth + 1, visited, alpha, beta)
+
+            if score == LOOSE_SCORE:
+                continue
+
+            non_loose += 1
 
             # Early termination if a winning state was found in the branch
             if score >= VICTORY_SCORE:
@@ -490,6 +500,8 @@ class BoardState:
             alpha = max(alpha, best_score)
             if beta <= alpha:
                 break  # Beta cutoff
+
+        if non_loose == 0: return LOOSE_SCORE
 
         return best_score
 
@@ -533,33 +545,42 @@ class BoardState:
         )
 
         if apply_bonus:
-            if len(prev_scores) == 10:
-                stagnation = (max(prev_scores) - min(prev_scores)) < self.stagnation_threshold
-                if stagnation:
-                    print("Base Score", base_score)
-                    print("stagnated", max(prev_scores) - min(prev_scores))
-                    print(prev_scores)
+
+            if len(prev_scores) == PREV_SCORE_COUNTER:
+                stagnation = (max(max(prev_scores),base_score) - min(min(prev_scores),base_score)) < self.stagnation_threshold
             else: 
                 stagnation = False
 
             if stagnation:
-                print("Calling dfs!")
+                print("DFS!")
+                print("ENTRY Score:", base_score, "Goal Score:", base_score + self.stagnation_threshold)
                 dep = 2
                 new_score = 0
+                last_score = 0
+                same_counter = 0
                 while new_score < base_score + self.stagnation_threshold:
                     new_score = self.improved_look_ahead_score_boost(max_depth=dep)
-                    print("current dep", dep)
+
+                    if new_score - last_score < SAME_SCORE_THRESHOLD:
+                        same_counter += 1
+
+                        if same_counter > SAME_COUNTER_THRESHOLD: return LOOSE_SCORE
+                    else:
+                        same_counter = 0
+
+                    last_score = new_score
+                    print("depth:", dep, "score:",new_score)
+                    if new_score is LOOSE_SCORE: return LOOSE_SCORE
                     dep += 1
 
-                print("New Score", new_score)
-                print("Depth needed:", dep)
+                #print("New Score", new_score)
+                #print("Depth needed:", dep)
                 total_score = new_score
-                print("Total Score:", total_score)
+                self.DFSPenalty += DFS_PENALTY_SCORE
+                print("FINAL Score:", total_score)
             else:
                 total_score = base_score
 
-            if len(prev_scores) > 10:
-                prev_scores.pop(0)
         else:
             total_score = base_score
         
@@ -695,6 +716,7 @@ class BoardState:
             initialize_deck=False  # Don't create deck for clones
         )
         new_state.move_count = self.move_count
+        new_state.DFSPenalty = self.DFSPenalty
         new_state.current_weights = SimpleNamespace(**self.current_weights.__dict__)
         return new_state
 
@@ -707,8 +729,10 @@ class MaxPriorityQueue:
     def __init__(self):
         self.heap = []
 
-    def push(self, state):
-        heapq.heappush(self.heap, (-state.get_score(), state))
+    def push(self, move):
+        print("Added SCORE: ", move.get_score())
+
+        heapq.heappush(self.heap, (-move.get_score(), move))
 
     def pop(self):
         return heapq.heappop(self.heap)[1]
@@ -779,12 +803,6 @@ class FreecellBot():
                 board = state.clone()
                 if board.move_tableau_to_tableau(i, o): self.queue_move(board, last_move)
 
-                #SuperMove
-                """
-                for cardsCount in range(len(state.tableau[i])):
-                    board = state.clone()
-                    if board.move_supermove(i, o, cardsCount): self.queue_move(board, state)
-                """
 
         #Move from the freecell to the foundation
         for i in range(FREECELL_COUNT):
@@ -793,24 +811,7 @@ class FreecellBot():
 
     def queue_move(self, board, state):
 
-        for b in previousSet:
-            if b == board:
-                """
-                board.display()
-                b.display()
-                self.start_board.display()
-
-                print(len(self.previous))
-                print(board, b)
-                """
-
-                return
-
-        """
-        print("added")
-
-        board.display()
-        """
+        if board in previousSet: return
 
         previousSet.add(board)
         self.queue.push(BotMove(board, state))
@@ -831,6 +832,9 @@ class FreecellBot():
 
             highest_move = self.queue.pop()
             state = highest_move.get_board()
+            prev_scores.append(highest_move.get_score())
+            while len(prev_scores) > PREV_SCORE_COUNTER: prev_scores.pop(0)
+            print("prev_scores:", prev_scores)
 
             yield state
 
@@ -852,7 +856,6 @@ class FreecellBot():
             #state.display()
 
             self.get_possible_moves(state, highest_move)
-            prev_scores.append(highest_move.get_score())
 
         if len(self.moves) > 0:
 
