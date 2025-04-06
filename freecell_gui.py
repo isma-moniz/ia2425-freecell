@@ -115,6 +115,7 @@ class FreeCellGUI:
         self.current_mode = mode
         self.show_main_menu = False
         self.show_game = True
+        self.bot = FreecellBot()
 
         if mode == "bot":
             self.bot_moves = queue.Queue()
@@ -122,8 +123,7 @@ class FreeCellGUI:
             self.bot_thread.start()
 
     def run_bot_thread(self):
-        bot = FreecellBot()
-        for state in bot.get_plays(self.game):
+        for state in self.bot.get_plays(self.game):
             self.bot_moves.put(state)
             #pygame.time.wait(50)
 
@@ -361,6 +361,9 @@ class FreeCellGUI:
                     # self.game.board_state = self.game.get_board()
                 elif event.key == K_r:  # Reset
                     self.init_game(self.current_mode)
+                elif event.key == K_h:
+                    best_botmove = self.bot.get_hint(self.game)
+                    self.game.board_state = best_botmove.get_board()
 
     def run_bot_move(self):
         """Execute a single bot move"""
